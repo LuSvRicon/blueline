@@ -1,0 +1,246 @@
+/* A separate touch driving station for short, landscape viewports. Original
+   controls are moved, never cloned: keyboard and touch share the same input. */
+.mobile-steering, .mobile-drive-nav, .mobile-live-status, .mobile-rotate-hint { display: none; }
+.intro-touch-hint { display: none; }
+html, body { overscroll-behavior: none; }
+@supports (height: 100dvh) { #app, #ui { height: 100dvh; } #ui { bottom: auto; } }
+
+#ui.game-ui.dashboard-ui.phone-landscape {
+  --phone-left: max(8px, env(safe-area-inset-left));
+  --phone-right: max(8px, env(safe-area-inset-right));
+  --phone-bottom: max(5px, env(safe-area-inset-bottom));
+  --phone-top: max(4px, env(safe-area-inset-top));
+  --dashboard-height: clamp(148px, 38dvh, 164px);
+  --dashboard-bottom: var(--phone-bottom);
+  --dock-height: calc(var(--dashboard-height) + var(--phone-bottom));
+  --phone-steering: clamp(100px, 17vw, 156px);
+  --phone-pedals: clamp(132px, 21vw, 192px);
+}
+#ui.game-ui.dashboard-ui.phone-landscape .game-toolbar {
+  inset: var(--phone-top) var(--phone-right) auto var(--phone-left);
+  min-height: 44px; height: 44px; padding: 0 4px; gap: 3px; border-radius: 10px;
+}
+#ui.game-ui.dashboard-ui.phone-landscape .game-brand { min-width: 0; padding: 0 5px; gap: 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-brand-mark { width: 26px; height: 28px; font-size: 22px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-brand > div, #ui.game-ui.dashboard-ui.phone-landscape .toolbar-divider,
+#ui.game-ui.dashboard-ui.phone-landscape .game-tool kbd, #ui.game-ui.dashboard-ui.phone-landscape #game-score,
+#ui.game-ui.dashboard-ui.phone-landscape #game-scenarios, #ui.game-ui.dashboard-ui.phone-landscape #game-settings,
+#ui.game-ui.dashboard-ui.phone-landscape #game-vehicles, #ui.game-ui.dashboard-ui.phone-landscape #game-focus { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-tool, #ui.game-ui.dashboard-ui.phone-landscape #game-mode {
+  min-height: 42px; padding: 5px 9px; font-size: 11px;
+}
+#ui.game-ui.dashboard-ui.phone-landscape #game-mode { width: 130px; max-width: 130px; border-radius: 7px; height: 36px; min-height: 36px; padding-inline: 5px; font-size: 16px; }
+#ui.game-ui.dashboard-ui.phone-landscape #game-menu { font-size: 18px; min-width: 44px; }
+#ui.game-ui.dashboard-ui.phone-landscape #game-menu > span { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape #game-camera { max-width: 118px; overflow: hidden; text-overflow: ellipsis; }
+#ui.game-ui.dashboard-ui.phone-landscape #game-surround { color: #9aeacb; }
+#ui.game-ui.dashboard-ui.phone-landscape #game-fullscreen, #ui.game-ui.dashboard-ui.phone-landscape #game-surround { display: inline-flex; align-items: center; justify-content: center; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-icon-tool, #ui.game-ui.dashboard-ui.phone-landscape .game-pause { min-width: 44px; font-size: 22px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-session-strip {
+  top: calc(var(--phone-top) + 50px); left: calc(var(--phone-left) + 6px); right: var(--phone-right);
+  font-size: 9px; letter-spacing: 0; gap: 7px;
+}
+#ui.game-ui.dashboard-ui.phone-landscape #game-scenario-info { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%; }
+#ui.game-ui.dashboard-ui.phone-landscape #game-session-info { white-space: nowrap; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-keybar { display: none; }
+
+/* Two thumb zones frame a central tabbed instrument. Nothing floats over the
+   main camera: Scene reserves precisely this station's measured height. */
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock,
+#ui.game-ui.dashboard-ui.phone-landscape.surround-docked .game-dock {
+  inset: auto var(--phone-right) var(--phone-bottom) var(--phone-left);
+  max-width: none; height: var(--dashboard-height); padding: 7px; margin: 0;
+  grid-template-columns: var(--phone-steering) minmax(0, 1fr) var(--phone-pedals);
+  grid-template-rows: 36px minmax(0, 1fr); gap: 5px 8px;
+  border-radius: 14px; background: linear-gradient(155deg,#172c39f7,#09141dfc 70%);
+  box-shadow: 0 -5px 22px #0005, inset 0 1px #d0f1ff0c;
+}
+#ui.game-ui.dashboard-ui.phone-landscape .dashboard-ribbon { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock > .panel {
+  min-height: 0; min-width: 0; padding: 0; border: 0; border-radius: 0;
+  background: none; box-shadow: none; container-type: normal;
+}
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-drive-nav {
+  display: flex; grid-column: 2; grid-row: 1; gap: 3px; padding-left: 78px;
+}
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-drive-nav button {
+  flex: 1; min-width: 0; padding: 4px; border: 1px solid #8daebe28; border-radius: 7px;
+  color: #9eb5c4; background: #20344155; font: 650 11px/1 "Segoe UI",sans-serif; cursor: pointer;
+}
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-drive-nav button[aria-pressed="true"] { color: #aff8d9; background: #2855476b; border-color: #80d8b773; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-steering {
+  display: flex; flex-direction: column; justify-content: center; gap: 5px;
+  grid-column: 1; grid-row: 1 / 3; min-width: 0; padding-right: 7px; border-right: 1px solid #8daebe22;
+}
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-section-label { color: #8daebf; font-size: 8px; letter-spacing: .8px; text-align: center; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-steering .steering-controls { display: flex; gap: 6px; margin: 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-steering .steering-controls > span { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-steering .steering-controls button {
+  flex: 1; min-width: 0; min-height: 58px; border: 1px solid #86aabb55; border-radius: 12px;
+  background: linear-gradient(150deg,#2a414f,#152630); color: #d2e9f4; font-size: 24px;
+  box-shadow: inset 0 1px #e1f8ff15,inset 0 -3px #0004; touch-action: none;
+}
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-steering kbd { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-steering .adas-indctl { display: flex; gap: 6px; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-steering .adas-indctl button {
+  flex: 1; min-width: 0; min-height: 40px; padding: 0; border: 1px solid #ba9c543b; border-radius: 9px;
+  background: #483c1e22; color: #c8b27d; font-size: 18px; cursor: pointer;
+}
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-steering .adas-indctl button.active { color: #ffd57b; background: #75591b70; border-color: #ffd57b; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-steering .adas-indctl button:first-child::after { content: ' Xi nhan'; font: 9px "Segoe UI",sans-serif; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-steering .adas-indctl button:last-child::before { content: 'Xi nhan '; font: 9px "Segoe UI",sans-serif; }
+#ui.game-ui.dashboard-ui.phone-landscape button, #ui.game-ui.dashboard-ui.phone-landscape summary { -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-steering .steering-controls button, #ui.game-ui.dashboard-ui.phone-landscape .pedal { touch-action: none; -webkit-touch-callout: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-steering .steering-controls button:active { background: #285747; border-color: #85eac0; }
+
+/* The real speed/gear readings remain visible on every tab. */
+#ui.game-ui.dashboard-ui.phone-landscape:not(.focus-mode) .game-dock > .speedo {
+  display: flex; position: relative; inset: auto; grid-column: 2; grid-row: 1; align-self: center; justify-self: start;
+  width: 74px; height: 36px; padding: 0; flex-direction: row; align-items: center; gap: 4px; pointer-events: none;
+}
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .speed-ring { width: auto; height: 34px; flex: 1 1 auto; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .speed-ring::before,
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .speed-ring svg,
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .dashboard-cluster-label,
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .cluster-rpm,
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .autopill,
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .cluster-telltales,
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .turn-led { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .speed-core { display: flex; flex-direction: row; align-items: baseline; justify-content: flex-start; gap: 2px; margin: 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .speed-num { font-size: 32px; line-height: 34px; letter-spacing: -1.8px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .speed-unit { font-size: 7px; margin: 0; letter-spacing: 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock > .speedo .speed-tags { display: flex; position: static; }
+#ui.game-ui.dashboard-ui.phone-landscape .speed-tags .dashboard-gear-label, #ui.game-ui.dashboard-ui.phone-landscape .speed-tags .limit { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .gear { display: block; font-size: 12px; padding: 3px; min-width: 14px; border: 0; }
+
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock > .center-console,
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock > #adas-panel,
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock > .camera-360-widget { grid-column: 2; grid-row: 2; display: none !important; }
+#ui.game-ui.dashboard-ui.phone-landscape[data-mobile-view="drive"] .game-dock > .center-console { display: flex !important; flex-direction: column; justify-content: center; gap: 5px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .console-title, #ui.game-ui.dashboard-ui.phone-landscape .game-dock .console-state { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .prnd-row { display: grid; grid-template-columns: repeat(4,1fr); margin: 0; padding: 0; gap: 5px; border: 0; background: transparent; box-shadow: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .gear-select { min-height: 44px; padding: 3px; flex-direction: row; gap: 5px; border-radius: 7px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .gear-select b { font-size: 19px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .gear-select small { font-size: 8px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .gear-select i { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .console-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .console-action { flex-direction: row; min-height: 36px; padding: 2px 7px; gap: 5px; border-radius: 7px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .console-action-icon { width: 21px; height: 21px; flex: 0 0 21px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .console-action-icon svg { width: 16px; height: 16px; }
+#ui.game-ui.dashboard-ui.phone-landscape .console-action-copy small { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .console-action-copy b { font-size: 10px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .console-alert:not(:empty) { position: fixed; left: 24%; right: 24%; bottom: calc(var(--dock-height) + 6px); max-height: 35px; margin: 0; padding: 6px; background: #291c16ee; border-radius: 6px; font-size: 10px; }
+
+/* Pedals stay usable while changing gear, ACC settings or camera angle. */
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock > .pedal-controls {
+  display: flex; flex-direction: column; justify-content: center; grid-column: 3; grid-row: 1 / 3;
+  padding-left: 7px; border-left: 1px solid #8daebe22;
+}
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .pedal-head, #ui.game-ui.dashboard-ui.phone-landscape .game-dock .pedal-state { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .pedal-row { grid-template-columns: 1fr 1fr; gap: 6px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .pedal { min-height: 83px; padding: 5px; flex-direction: column; gap: 4px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .pedal-mechanism { height: 37px; flex: 0 0 37px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .pedal-arm { height: 32px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .pedal-face { height: 28px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .accelerator .pedal-face { height: 35px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .pedal b { font-size: 11px; letter-spacing: .5px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .brake-meter-label { margin-top: 6px; font-size: 8px; letter-spacing: 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .brake-meter-caption { display: block; font-size: 8px; white-space: nowrap; }
+
+/* ACC keeps the real yellow lead distance, set speed and gap controls. */
+#ui.game-ui.dashboard-ui.phone-landscape[data-mobile-view="adas"] .game-dock > #adas-panel { display: block !important; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock #adas-panel { padding: 0; border: 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock #adas-panel > .adas-head,
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock #adas-panel > .adas-radar-block,
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock #adas-panel > .adas-status-strip { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock #adas-panel > .adas-command-zone { display: grid; grid-template-rows: 20px minmax(0,1fr); gap: 2px; height: 100%; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock #adas-panel .adas-metrics { display: flex; justify-content: space-between; align-items: center; gap: 7px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-metric { flex-direction: row; align-items: baseline; gap: 4px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-metric > span { font-size: 7px; letter-spacing: 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-metric b { font-size: 11px; margin: 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-distance-metric b { font-size: 17px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-headway-metric { padding: 0; border: 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock #adas-panel .adas-controls { display: grid !important; grid-template-columns: minmax(112px,1fr) 110px; grid-template-rows: 36px 28px; gap: 3px 7px; align-items: stretch; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-control-caption, #ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-gap-caption { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-speed-control { display: grid; grid-template-columns: 36px minmax(30px,1fr) 36px; grid-template-rows: 36px; gap: 3px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-speed-control > button,
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-speed-control > label { grid-row: 1; height: 36px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-speed-control input { width: 35px; font-size: 19px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-speed-control small { display: inline; font-size: 7px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-mini { height: 36px; min-width: 0; font-size: 18px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-cruise-controls { display: grid; grid-template-columns: repeat(3,1fr); grid-template-rows: 36px; gap: 3px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-cruise-controls button { grid-row: 1; font-size: 10px; height: 36px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-gapctl { grid-column: 1 / -1; grid-row: 2; padding-right: 42px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .adas-gap-choice { width: 100%; height: 28px; padding: 1px 7px; font-size: 16px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock #adas-panel > .adas-config { top: auto; right: 0; bottom: 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock #adas-panel .adas-config > summary { width: 36px; height: 28px; min-height: 28px; }
+
+/* Surround camera uses the center bay, with quick angles beside the picture. */
+#ui.game-ui.dashboard-ui.phone-landscape[data-mobile-view="camera"] .game-dock > .camera-360-widget { display: grid !important; position: relative; inset: auto; width: auto; grid-template-columns: minmax(0,1fr) 100px; grid-template-rows: minmax(0,1fr); gap: 5px; padding: 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .camera-360-head { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape.surround-docked .camera-360-screen { height: 100%; min-height: 0; aspect-ratio: auto; border-radius: 8px; }
+#ui.game-ui.dashboard-ui.phone-landscape.surround-docked .camera-360-modes { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: repeat(3,1fr); margin: 0; gap: 3px; }
+#ui.game-ui.dashboard-ui.phone-landscape.surround-docked .camera-360-modes button { min-height: 0; padding: 2px; font-size: 9px; }
+#ui.game-ui.dashboard-ui.phone-landscape .camera-360-modes button:last-child { grid-column: 1 / -1; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-dock .camera-360-tag { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .rcta-arrow { font-size: 26px; }
+
+/* Status is independent of the open tab and never covers the horizon. */
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-live-status {
+  position: absolute; inset: auto 12px calc(100% + 6px); display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  pointer-events: none; color: #c1d6df; font-size: 9px; text-shadow: 0 1px 3px #000;
+}
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-live-status .adas-badge { max-width: 65%; font-size: 9px; background: #091821de; padding: 4px 7px; border-radius: 5px; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-live-status .adas-badge.warn { color: #ffda91; background: #392b12ee; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-live-status .adas-badge.danger { color: #ffd0c8; background: #7e2325ee; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-lead-distance { padding: 4px 7px; border-radius: 5px; background: #091821de; white-space: nowrap; }
+#ui.game-ui.dashboard-ui.phone-landscape .mobile-lead-distance b { color: #f6cd79; font-size: 12px; margin-left: 4px; }
+#ui.game-ui.dashboard-ui.phone-landscape .hud-aeb-warning { bottom: calc(var(--dock-height) + 31px); padding: 6px 10px; font-size: 11px; max-width: 65%; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-feedback { top: calc(var(--phone-top) + 69px); font-size: 10px; max-width: 65%; }
+#ui.game-ui.dashboard-ui.phone-landscape .controls, #ui.game-ui.dashboard-ui.phone-landscape .adas-config-menu {
+  z-index: 48; left: var(--phone-left); top: calc(var(--phone-top) + 49px); bottom: var(--phone-bottom);
+  width: min(390px, calc(100vw - var(--phone-left) - var(--phone-right))); padding: 12px;
+}
+#ui.game-ui.dashboard-ui.phone-landscape .controls .panel-header, #ui.game-ui.dashboard-ui.phone-landscape .adas-config-heading { flex-shrink: 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .control-drawer > summary, #ui.game-ui.dashboard-ui.phone-landscape .bl, #ui.game-ui.dashboard-ui.phone-landscape .control-mode-btn { min-height: 40px; }
+#ui.game-ui.dashboard-ui.phone-landscape .adas-config-close, #ui.game-ui.dashboard-ui.phone-landscape .control-close { width: 36px; height: 36px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-setting-select, #ui.game-ui.dashboard-ui.phone-landscape .adas-reference-controls select { min-height: 40px; font-size: 16px; }
+#ui.game-ui.dashboard-ui.phone-landscape input[type="number"], #ui.game-ui.dashboard-ui.phone-landscape select { font-size: 16px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-pause-overlay { inset: calc(var(--phone-top) + 48px) 0 var(--dock-height); z-index: 46; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-pause-card { padding: 12px 20px; width: 300px; max-height: 100%; overflow-y: auto; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-pause-card h2 { font-size: 20px; margin-top: 4px; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-pause-card p { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .game-primary, #ui.game-ui.dashboard-ui.phone-landscape .game-secondary { min-height: 36px; margin-top: 5px; }
+
+/* Compact launch menu still exposes all modes and choices without making the
+   start button disappear below a desktop-height welcome card. */
+#ui.game-ui.dashboard-ui.phone-landscape .intro { padding: var(--phone-top) var(--phone-right) var(--phone-bottom) var(--phone-left); }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-card { width: min(740px,100%); max-height: 100%; padding: 15px 18px; overscroll-behavior: contain; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-title { font-size: 23px; letter-spacing: 5px; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-sub { font-size: 8px; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-tag { font-size: 10px; margin: 8px 0; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-modes { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-mode { display: grid; grid-template-columns: 22px 1fr; padding: 8px; gap: 4px; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-mode-icon { font-size: 17px; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-mode-title { font-size: 12px; align-self: center; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-mode-text { grid-column: 1 / -1; font-size: 9px; line-height: 1.4; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-row { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin-top: 10px; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-field { gap: 4px; font-size: 8px; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-field select { height: 36px; font-size: 16px; padding: 5px; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-field .seg-btn { min-height: 36px; padding: 6px; font-size: 10px; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-start { position: sticky; bottom: 0; margin-top: 10px; min-height: 40px; background: #215b48; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-hint { font-size: 9px; margin-top: 8px; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-keyboard-hint { display: none; }
+#ui.game-ui.dashboard-ui.phone-landscape .intro-touch-hint { display: inline; }
+@media (max-width: 600px) and (orientation: landscape) {
+  #ui.game-ui.dashboard-ui.phone-landscape #game-surround { display: none; }
+  #ui.game-ui.dashboard-ui.phone-landscape .game-tool { padding-inline: 6px; }
+  #ui.game-ui.dashboard-ui.phone-landscape .mobile-steering .adas-indctl button:last-child::before,
+  #ui.game-ui.dashboard-ui.phone-landscape .mobile-steering .adas-indctl button:first-child::after { content: none; }
+  #ui.game-ui.dashboard-ui.phone-landscape .adas-headway-metric > span { display: none; }
+  #ui.game-ui.dashboard-ui.phone-landscape .mobile-drive-nav { padding-left: 72px; }
+  #ui.game-ui.dashboard-ui.phone-landscape .intro-mode-text, #ui.game-ui.dashboard-ui.phone-landscape .intro-version { display: none; }
+}
+@media (max-width: 600px) and (orientation: portrait) {
+  #ui:not(.launch-open) .mobile-rotate-hint { display: block; position: absolute; top: 65px; left: 12px; right: 12px; padding: 10px; border: 1px solid #8fe5c853; border-radius: 8px; color: #c4f7e4; background: #102b26ee; font-size: 12px; text-align: center; }
+}

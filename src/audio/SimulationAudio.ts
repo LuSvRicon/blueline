@@ -126,10 +126,12 @@ export class SimulationAudio {
 
     const state = sim.adas.status;
     const emergencyBrake = state.aeb || state.extra.pedalMitigation || state.extra.blindSpotBraking;
-    const alert = emergencyBrake ? "aeb" : state.takeoverRequired ? "takeover" : state.fcw ? "fcw" : state.rctaActive ? "rcta" : state.extra.leadDeparture ? "departure" : state.blindSpotLeft ? "left" : state.blindSpotRight ? "right" : state.speedWarning ? 'speed' : "";
+    const bsmConflictLeft = state.blindSpotLeft && (sim.indicator < 0 || state.extra.blindSpotIntervention);
+    const bsmConflictRight = state.blindSpotRight && (sim.indicator > 0 || state.extra.blindSpotIntervention);
+    const alert = emergencyBrake ? "aeb" : state.takeoverRequired ? "takeover" : state.fcw ? "fcw" : state.rctaActive ? "rcta" : bsmConflictLeft ? "left" : bsmConflictRight ? "right" : state.laneDeparture === "left" ? "ldw-left" : state.laneDeparture === "right" ? "ldw-right" : state.extra.leadDeparture ? "departure" : state.speedWarning ? 'speed' : "";
     if (alert && alert !== this.previousAlert) {
-      const frequency = alert === "aeb" ? 980 : alert === "fcw" ? 740 : alert === "rcta" ? 620 : 480;
-      const pan = alert === "left" || (alert === "rcta" && state.rctaLeft) ? -0.65 : alert === "right" || (alert === "rcta" && state.rctaRight) ? 0.65 : 0;
+      const frequency = alert === "aeb" ? 980 : alert === "fcw" ? 740 : alert === "rcta" || alert === "left" || alert === "right" ? 660 : alert.startsWith("ldw-") ? 540 : 480;
+      const pan = alert === "left" || alert === "ldw-left" || (alert === "rcta" && state.rctaLeft) ? -0.65 : alert === "right" || alert === "ldw-right" || (alert === "rcta" && state.rctaRight) ? 0.65 : 0;
       this.playAlert(frequency, pan, alert === "aeb" ? 0.25 : 0.16);
     }
     // Escalating chime while AEB is actually braking.

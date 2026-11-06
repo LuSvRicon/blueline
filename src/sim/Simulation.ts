@@ -712,7 +712,11 @@ export class Simulation {
         const vAlong = t.vx * tx + t.vy * ty;
         const vLat = -t.vx * ty + t.vy * tx;
         const lateralSigma = Math.sqrt(Math.max(0, ty * ty * t.P[2][2] - 2 * tx * ty * t.P[2][3] + tx * tx * t.P[3][3]));
-        const vd = this.controlMode === "adas" ? Math.abs(vLat) > Math.max(.35, lateralSigma * 2) ? vLat : 0 : vLat;
+        const vd = this.controlMode === "adas"
+          ? Math.abs(vLat) > Math.max(.42, lateralSigma * 3.5) && (t.hits >= 3 || Math.abs(vLat) > 1.8)
+            ? vLat
+            : 0
+          : vLat;
         // Continuous rails use the known map's lateral geometry. Noisy radar
         // returns still locate them longitudinally, but must not move a mapped
         // median 0.8 m into a clear lane or turn it into an approaching car.
@@ -876,7 +880,10 @@ export class Simulation {
 
       if (!inPath) continue;
       const stoppingDist = (Math.max(closing, 0) ** 2) / (2 * Math.max(this.ego.maxDecel * this.ego.surfaceMu * 0.8, 1)) + this.ego.v * 0.3 + 4;
-      if (gap < stoppingDist || gap < 6.0 || ttc < 2.0) brake = -this.ego.maxDecel;
+      if (gap < stoppingDist || gap < 6.0 || ttc < 2.0) {
+        const changingLane = this.controlMode === "classical" && this.plan && this.plan.targetLane !== this.road.laneOf(f.d);
+        brake = changingLane && gap > 10 ? -this.ego.maxDecel * this.ego.surfaceMu * 0.48 : -this.ego.maxDecel;
+      }
     }
     return brake;
   }
@@ -977,13 +984,27 @@ export class Simulation {
 
   /** Posted limit the ADAS traffic-sign recognition can read right now. */
   nearestSpeedLimit(s: number): number | null {
-    let best: number | null = null;
+    let best: RoadSign | null = null;
+    let bestDist = Infinity;
     for (const sign of this.roadSigns) {
       const relative = wrapDiff(sign.s, s, this.path.length);
       if (relative < -14 || relative > 85) continue;
-      if (best === null || sign.valueKph < best) best = sign.valueKph;
+      const dist = Math.abs(relative);
+      if (best === null) {
+        best = sign;
+        bestDist = dist;
+      } else if (Math.abs(wrapDiff(sign.s, best.s, this.path.length)) < 45) {
+        // Co-located zone restriction signs (e.g., school/work zone) take the lower limit.
+        if (sign.valueKph < best.valueKph) {
+          best = sign;
+          bestDist = dist;
+        }
+      } else if (dist < bestDist) {
+        best = sign;
+        bestDist = dist;
+      }
     }
-    return best;
+    return best ? best.valueKph : null;
   }
 
   /** Nearest signalised stop line ahead (for ADAS traffic-light recognition). */
@@ -1205,6 +1226,7 @@ export class Simulation {
       s.posNoise = 0.35;
       this.weatherSpeedFactor = 1;
     }
+    this.tracker.config.measNoise = s.posNoise;
     this.updateSensorRangeForMode();
   }
   setCollecting(on: boolean): void {
@@ -1265,7 +1287,8 @@ export class Simulation {
         return clearance > 6 + (ahead > 0 ? this.ego.v : car.v) * 1.2;
       });
       const goalLaneD = this.road.laneCenter(laneClear ? requestedLane : occupiedLane);
-      this.trackLaneD = smoothTowards(this.trackLaneD, goalLaneD, 1.6, dt);
+      const laneTrackRate = Math.max(1.6, Math.min(3.4, this.ego.v * 0.085));
+      this.trackLaneD = smoothTowards(this.trackLaneD, goalLaneD, laneTrackRate, dt);
       const roadHeading = this.path.cartesianAt(ff.s).heading;
       const headingErr = wrapAngle(roadHeading - this.ego.yaw);
       const crossTrack = ff.d - this.trackLaneD; // +ve when ego is left of tracked centre
@@ -1360,6 +1383,16 @@ export class Simulation {
       if(extra.status.driverResponded){this.driverAttentive=this.driverHandsOn=true;}
       if (extra.status.driverWarning === "takeover") { this.adas.status.takeoverRequired = true; this.adas.cancelCruise(); }
       if (extra.status.pedalMitigation || extra.status.blindSpotBraking) this.adas.status.adasBrakeForce = 1;
+      if (extra.status.evasiveSteering) {
+        this.adas.status.adasBrakeForce = accel < 0 ? clamp(-accel / this.ego.maxDecel, 0, 1) : 0;
+        const targetEvadeLane = this.extendedAssistance.activeEvadeLane;
+        if (targetEvadeLane !== null) {
+          this.adas.setLaneTarget(targetEvadeLane);
+          if (Math.abs(driverPose.d - this.road.laneCenter(targetEvadeLane)) < this.road.laneWidth * 0.48) {
+            this.adas.releaseAebLatch();
+          }
+        }
+      }
       if (extra.status.minimalRiskBraking) this.adas.status.adasBrakeForce = Math.max(this.adas.status.adasBrakeForce, 2 / this.ego.maxDecel);
     } else this.extendedAssistance.reset();
 
@@ -1420,6 +1453,7 @@ export class Simulation {
       rctaRight: rearAlert.right,
       rearAeb: rearAebActive,
       aeb: rearAebActive || this.adas.status.aeb,
+      brakeReason: rearAebActive ? "aeb" : this.adas.status.brakeReason,
       adasBrakeForce: rearAebActive ? 1 : this.adas.status.adasBrakeForce,
     };
     if (rearAebActive) accel = Math.min(accel, -this.ego.maxDecel);

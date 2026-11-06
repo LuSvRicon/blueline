@@ -118,10 +118,11 @@ export class ParkingAssist {
     const targetSpeed = Math.min(this.status.mode === "apa" ? 1.3 : .7, Math.sqrt(Math.max(0, 1.2 * (remaining - .15))));
     command.accel = clamp((targetSpeed - ego.v) * 2, -ego.maxDecel, 1);
     const direction = segment.gear === "R" ? -1 : 1;
+    const sweepDist = Math.min(1.5, Math.max(0.35, remaining + 0.1));
     // Predict the actual vehicle sweep (including rotation), with moving
     // actors, before applying any throttle. A new obstacle aborts the manoeuvre.
-    const next: Body2D = { ...ego, ...ego.dims, x: ego.x + direction * Math.cos(ego.yaw) * 1.5, y: ego.y + direction * Math.sin(ego.yaw) * 1.5,
-      yaw: ego.yaw + direction * 1.5 / ego.dims.wheelbase * Math.tan(command.steer) };
+    const next: Body2D = { ...ego, ...ego.dims, x: ego.x + direction * Math.cos(ego.yaw) * sweepDist, y: ego.y + direction * Math.sin(ego.yaw) * sweepDist,
+      yaw: ego.yaw + direction * sweepDist / ego.dims.wheelbase * Math.tan(command.steer) };
     for (const o of frame.obstacles) {
       const w = frame.path.toCartesian(o.s, o.d), predicted = frame.path.toCartesian(o.s + o.v, o.d + o.vd);
       const body: Body2D = { x: w.x, y: w.y, yaw: w.heading, length: o.length, width: o.width };

@@ -27,6 +27,7 @@ const TESTS = [
   "audio-runtime-test",
   "adas-runtime-audit-test",
   "pedal-console-input-test",
+  "touch-steering-test",
   "parking-assist-test",
   "extended-adas-test",
   "adas-brake-test",

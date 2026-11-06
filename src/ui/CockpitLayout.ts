@@ -19,15 +19,21 @@ export class CockpitLayout {
   private pauseOverlay: HTMLElement;
   private lastCamera: CameraMode;
   private lastRefresh = -Infinity;
+  private phoneQuery = window.matchMedia("(max-width: 1024px) and (max-height: 540px) and (orientation: landscape)");
+  private mobileView: "drive" | "adas" | "camera" = "drive";
+  private beforeReverseView: "drive" | "adas" | "camera" = "drive";
+  private previousGear: string;
+  private steeringHome: HTMLElement;
+  private indicatorsHome: HTMLElement;
 
   constructor(private root: HTMLElement, private sim: Simulation, private scene: Scene,
     private drive: DriveControls, private camera360: Camera360Widget, telemetry: TelemetryPanel) {
-    root.classList.add("game-ui", "dashboard-ui");
+    root.classList.add("game-ui", "dashboard-ui", "station-ui");
     root.insertAdjacentHTML("beforeend", `
       <header class="game-toolbar" aria-label="Thanh công cụ mô phỏng">
         <div class="game-brand"><span class="game-brand-mark">B<span>‖</span></span><div><b>BLUELINE</b><small>MÔ PHỎNG LÁI XE</small></div></div>
         <span class="toolbar-divider"></span>
-        <button class="game-tool" id="game-menu" aria-expanded="false" title="Mở bảng điều khiển (F1)">☰ <span>Điều khiển</span><kbd>F1</kbd></button>
+        <button class="game-tool" id="game-menu" aria-label="Mở bảng điều khiển" aria-expanded="false" title="Mở bảng điều khiển (F1)">☰ <span>Điều khiển</span><kbd>F1</kbd></button>
         <button class="game-tool" id="game-scenarios">Tình huống</button>
         <button class="game-tool" id="game-settings">Cài đặt</button>
         <button class="game-tool" id="game-vehicles" title="Chọn mẫu xe người lái" aria-expanded="false">Đổi xe</button>
@@ -56,6 +62,7 @@ export class CockpitLayout {
         </section>
       </div>
       <div id="game-feedback" class="game-feedback" role="status"></div>
+      <button type="button" class="station-scrim" id="station-close-drawer" aria-label="Đóng bảng đang mở" tabindex="-1" hidden></button>
     `);
     const dock = root.querySelector<HTMLElement>(".game-dock")!;
     for (const selector of [".center-console", ".speedo", ".adas-panel", ".pedal-controls"]) {
@@ -69,11 +76,45 @@ export class CockpitLayout {
     this.cameraButton = document.getElementById("game-camera") as HTMLButtonElement;
     this.pauseOverlay = root.querySelector<HTMLElement>(".game-pause-overlay")!;
     this.lastCamera = scene.cameraMode;
+    this.previousGear = sim.gear;
+    this.steeringHome = root.querySelector<HTMLElement>(".steering-controls")!.parentElement!;
+    this.indicatorsHome = root.querySelector<HTMLElement>(".adas-indctl")!.parentElement!;
+    dock.insertAdjacentHTML("beforeend", `
+      <section class="mobile-steering" aria-label="Lái và xi nhan cảm ứng"><span class="mobile-section-label">ĐÁNH LÁI · GIỮ NÚT</span></section>
+      <nav class="mobile-drive-nav" aria-label="Bảng điều khiển nhanh">
+        <button type="button" data-mobile-view="drive" aria-pressed="true" aria-label="Cần số và động cơ">Xe</button>
+        <button type="button" data-mobile-view="adas" aria-pressed="false" aria-label="Điều khiển hỗ trợ lái ADAS">ADAS</button>
+        <button type="button" data-mobile-view="camera" aria-pressed="false" aria-label="Xem camera 360 độ">360°</button>
+      </nav>
+      <div class="mobile-live-status"><span id="mobile-assistance-status"></span><span class="mobile-lead-distance"><span id="mobile-lead-label">Xe trước</span> <b id="mobile-lead-gap">—</b></span></div>
+    `);
+    root.insertAdjacentHTML("beforeend", '<div class="mobile-rotate-hint">↻ Xoay ngang điện thoại để lái bằng hai tay</div>');
+    for (const button of dock.querySelectorAll<HTMLButtonElement>("[data-mobile-view]")) {
+      button.addEventListener("click", () => this.setMobileView(button.dataset.mobileView as typeof this.mobileView));
+    }
+    const adapt = () => {
+      drive.clear();
+      root.classList.toggle("phone-landscape", this.phoneQuery.matches);
+      const steering = root.querySelector<HTMLElement>(".steering-controls")!;
+      const indicators = root.querySelector<HTMLElement>(".adas-indctl")!;
+      if (this.phoneQuery.matches) {
+        root.classList.remove("focus-mode");
+        root.querySelector(".mobile-steering")!.append(steering, indicators);
+      } else {
+        this.steeringHome.insertBefore(steering, this.steeringHome.querySelector(".pedal-row"));
+        this.indicatorsHome.appendChild(indicators);
+      }
+      this.setMobileView(this.sim.gear === "R" ? "camera" : this.mobileView);
+      this.lastRefresh = -Infinity;
+    };
+    this.phoneQuery.addEventListener("change", adapt);
+    window.addEventListener("orientationchange", () => drive.clear());
+    adapt();
     root.querySelector(".adas-config-heading")!.insertAdjacentHTML("beforeend", '<button type="button" class="adas-config-close" aria-label="Đóng cài đặt hỗ trợ" title="Đóng cài đặt hỗ trợ">×</button>');
     root.querySelector(".adas-config-close")!.addEventListener("click", () => { this.config.open = false; });
     this.config.addEventListener("toggle", () => {
       root.classList.toggle("adas-settings-open", this.config.open);
-      if (this.config.open) { this.panel.hidden = true; root.classList.remove("stats-open"); }
+      if (this.config.open) { drive.clear(); this.panel.hidden = true; root.classList.remove("stats-open"); }
     });
 
     // Preserve the AI lab and detailed telemetry inside optional drawers.
@@ -135,8 +176,27 @@ export class CockpitLayout {
       if (open) { this.panel.hidden = true; this.config.open = false; }
     });
     this.on("game-camera", () => this.cycleCamera());
-    this.on("game-surround", () => camera360.setExpanded(!camera360.expanded));
+    this.on("game-surround", () => {
+      if (this.phoneQuery.matches) this.setMobileView(this.mobileView === "camera" ? "drive" : "camera");
+      else camera360.setExpanded(!camera360.expanded);
+    });
     this.on("game-focus", () => this.toggleFocus());
+    const closeDrawers = () => {
+      this.panel.hidden = true;
+      this.config.open = false;
+      this.root.classList.remove("stats-open");
+      this.root.dataset.drawerOpen = "false";
+      document.getElementById("station-close-drawer")!.hidden = true;
+      this.drive.clear();
+      document.getElementById("game-menu")!.focus({ preventScroll: true });
+    };
+    this.on("station-close-drawer", closeDrawers);
+    window.addEventListener("keydown", event => {
+      if (event.code !== "Escape" || event.repeat || isTypingTarget(event.target) || launchMenuOpen()) return;
+      if (!this.panel.hidden || this.config.open || root.classList.contains("stats-open")) {
+        event.preventDefault(); event.stopImmediatePropagation(); closeDrawers();
+      }
+    }, { capture: true });
     this.on("game-pause", () => document.getElementById("c-pause")!.click());
     this.on("game-resume", () => { sim.paused = false; drive.clear(); });
     this.on("game-reset", () => { sim.reset(); sim.paused = false; drive.clear(); });
@@ -180,6 +240,7 @@ export class CockpitLayout {
   }
 
   private openControls(drawer?: string): void {
+    this.drive.clear();
     this.root.classList.remove("focus-mode", "stats-open");
     this.config.open = false;
     this.panel.hidden = drawer ? false : !this.panel.hidden;
@@ -192,8 +253,18 @@ export class CockpitLayout {
 
   private cycleCamera(): void { this.scene.cameraMode = CAMERAS[(CAMERAS.indexOf(this.scene.cameraMode) + 1) % CAMERAS.length]; }
   private toggleFocus(): void {
+    if (this.phoneQuery.matches) return; // Touch driving controls must remain reachable.
     const compact = this.root.classList.toggle("focus-mode");
     if (compact) { this.panel.hidden = true; this.config.open = false; this.root.classList.remove("stats-open"); }
+  }
+  private setMobileView(view: typeof this.mobileView): void {
+    this.mobileView = view;
+    this.root.dataset.mobileView = view;
+    for (const button of this.root.querySelectorAll<HTMLButtonElement>("[data-mobile-view]")) {
+      button.setAttribute("aria-pressed", String(button.dataset.mobileView === view));
+    }
+    if (this.phoneQuery.matches && view === "camera") this.camera360.setExpanded(true);
+    if (this.config && view !== "adas") this.config.open = false;
   }
   private feedback(message: string): void {
     const feedback = document.getElementById("game-feedback")!;
@@ -207,13 +278,19 @@ export class CockpitLayout {
     this.lastRefresh = now;
     const intro = launchMenuOpen();
     this.root.classList.toggle("launch-open", intro);
+    const drawerOpen = !intro && (!this.panel.hidden || this.config.open || this.root.classList.contains("stats-open"));
+    this.root.dataset.drawerOpen = String(drawerOpen);
+    document.getElementById("station-close-drawer")!.hidden = !drawerOpen;
     this.root.classList.toggle("reverse-mode", this.sim.gear === "R");
     const dock = this.root.querySelector<HTMLElement>(".game-dock")!;
-    const dockCamera=(window.innerWidth>=1180 || (this.scene.cameraMode==="cockpit" && window.innerWidth>=840)) && !this.root.classList.contains("focus-mode");
+    const dockCamera=this.phoneQuery.matches || (window.innerWidth>=840 && !this.root.classList.contains("focus-mode"));
     this.root.classList.toggle("surround-docked",dockCamera);
+    this.root.classList.toggle("surround-open", this.camera360.expanded);
     const cameraParent=dockCamera?dock:this.root;
     if(this.camera360.element.parentElement!==cameraParent)cameraParent.appendChild(this.camera360.element);
-    this.scene.setHudInset(this.root.classList.contains("focus-mode") ? 0 : window.innerHeight - dock.getBoundingClientRect().top + 6);
+    // Floating control groups: render the road behind their gaps instead of
+    // leaving an opaque empty strip underneath the main camera.
+    this.scene.setHudInset(this.root.classList.contains("focus-mode") ? 0 : window.innerHeight - dock.getBoundingClientRect().top + 6, true);
     document.getElementById("dashboard-drive-mode")!.textContent = this.sim.controlMode === "manual" ? "LÁI THỦ CÔNG" : this.sim.controlMode === "adas" ? "HỖ TRỢ LÁI ADAS" : "AI ĐANG ĐIỀU KHIỂN";
     this.pauseOverlay.hidden = !this.sim.paused || intro;
     this.root.classList.toggle("game-paused", this.sim.paused && !intro);
@@ -228,11 +305,28 @@ export class CockpitLayout {
     score.setAttribute("aria-expanded", String(this.root.classList.contains("stats-open")));
     document.getElementById("game-score-value")!.textContent = String(Math.round(this.sim.metrics.scores().overall));
     document.getElementById("game-focus")!.setAttribute("aria-pressed", String(this.root.classList.contains("focus-mode")));
-    document.getElementById("game-surround")!.setAttribute("aria-pressed", String(this.camera360.expanded));
+    document.getElementById("game-surround")!.setAttribute("aria-pressed", String(this.phoneQuery.matches ? this.mobileView === "camera" : this.camera360.expanded));
+    if (this.previousGear !== this.sim.gear) {
+      if (this.phoneQuery.matches) {
+        if (this.sim.gear === "R") { this.beforeReverseView = this.mobileView; this.setMobileView("camera"); }
+        else if (this.previousGear === "R") this.setMobileView(this.beforeReverseView);
+      }
+      this.previousGear = this.sim.gear;
+    }
+    if (this.phoneQuery.matches) {
+      const badge = document.getElementById("adas-badge")!;
+      const status = document.getElementById("mobile-assistance-status")!;
+      const cameraStatus = document.getElementById("camera360-status")!;
+      status.textContent = this.sim.gear === "R" ? cameraStatus.textContent : badge.textContent;
+      status.className = this.sim.gear === "R" ? `adas-badge ${cameraStatus.className}` : badge.className;
+      document.getElementById("mobile-lead-label")!.textContent = this.sim.gear === "R" ? "Phía sau" : "Xe trước";
+      const rear = this.sim.telemetry.adas.parkingRear;
+      document.getElementById("mobile-lead-gap")!.textContent = this.sim.gear === "R" ? rear === null ? "—" : `${rear.toFixed(1)} m` : document.getElementById("adas-gap")!.textContent;
+    }
     const pause = document.getElementById("game-pause")!;
     pause.textContent = this.sim.paused ? "▶" : "Ⅱ";
     pause.setAttribute("aria-label", this.sim.paused ? "Tiếp tục mô phỏng" : "Tạm dừng mô phỏng");
-    this.cameraButton.textContent = `${CAMERA_NAMES[this.scene.cameraMode]} · K`;
+    this.cameraButton.textContent = `${CAMERA_NAMES[this.scene.cameraMode]}${this.phoneQuery.matches ? "" : " · K"}`;
     document.getElementById("game-camera-name")!.textContent = this.scene.cameraMode === "cockpit" ? "Nhìn quanh: giữ chuột phải / Num 4·6 · Num 5 về giữa" : CAMERA_NAMES[this.scene.cameraMode];
     document.getElementById("game-scenario-info")!.textContent = `${this.sim.traffic.profile === "vietnam" ? "VIỆT NAM" : "QUỐC TẾ"} / ${this.sim.track.name} / ${SCENARIOS.find(s => s.id === this.sim.scenario)?.label ?? this.sim.scenario}`;
     const elapsed = Math.floor(this.sim.metrics.time);

@@ -410,6 +410,8 @@ export class ADASPanel {
       badge.textContent = 'BCA · PHANH KHI RỜI CHỖ'; badge.classList.add('danger');
     } else if (status.extra.pedalMitigation) {
       badge.textContent = "PMC · NGẮT GA / PHANH"; badge.classList.add("danger");
+    } else if (status.extra.evasiveSteering) {
+      badge.textContent = "ESA · ĐÁNH LÁI KHẨN CẤP"; badge.classList.add("danger");
     } else if (status.extra.driverWarning !== "none") {
       badge.textContent = status.extra.driverWarning === "hands" ? "ĐẶT TAY LÊN VÔ-LĂNG" : "CHÚ Ý LÁI XE"; badge.classList.add("warn");
     } else if (status.extra.leadDeparture) {
@@ -451,6 +453,7 @@ export class ADASPanel {
     }
     this.panel.querySelector("#adas-acc-cancel")!.classList.toggle("active", status.accState === "cancelled");
     const extraAlert = status.laneSupportLimited ? status.laneSupportLimitCause==='lateral-grip' ? 'Giảm tốc và tiếp quản · điều khiển ngang đã chạm giới hạn độ bám' : "Giảm tốc và tiếp quản · tốc độ quá cao cho cua hiện tại hoặc sắp tới" : status.takeoverRequired ? "Hãy tiếp quản · kiểm tra cảm biến/vạch làn hoặc trạng thái tài xế" : status.extra.pedalMitigation ? "PMC ngắt ga và phanh" :
+      status.extra.evasiveSteering ? "ESA hỗ trợ đánh lái khẩn cấp tránh vật cản" :
       status.extra.blindSpotIntervention ? "BCA hỗ trợ tránh xe trong điểm mù" : status.extra.emergencyLaneKeeping ? "ELK can thiệp tại mép đường" :
       status.extra.driverWarning !== "none" ? "Cảnh báo trạng thái tài xế giả lập" : status.extra.leadDeparture ? "Xe phía trước đã khởi hành" : "";
     if (extraAlert && extraAlert !== this.previousExtraAlert) this.log(extraAlert, status.takeoverRequired || status.extra.pedalMitigation ? "danger" : "warn");
@@ -463,7 +466,7 @@ export class ADASPanel {
       ldw: status.laneDeparture !== "none" ? "warn" : "off",
       fcw: status.aeb ? "danger" : status.fcw ? "warn" : "off",
       aeb: status.aeb ? "danger" : "off",
-      bsm: status.blindSpotLeft || status.blindSpotRight ? "warn" : "off",
+      bsm: (status.blindSpotLeft && sim.indicator < 0) || (status.blindSpotRight && sim.indicator > 0) || status.extra.blindSpotIntervention ? "danger" : status.blindSpotLeft || status.blindSpotRight ? "warn" : "off",
       alc: status.alc === "active" ? "on" : status.alc === "blocked" ? "warn" : status.alc === "armed" ? "warn" : "off",
       tsr: status.tsrLimitKph !== null ? (status.speedLimited || status.speedWarning ? "warn" : "on") : "off",
       rcta: status.rearAeb ? "danger" : status.rctaActive ? "warn" : status.rctaArmed ? 'on' : "off",
@@ -691,11 +694,16 @@ export class ADASPanel {
       ctx.fillRect(egoX + 14, egoY - 18, 4, 4);
     }
 
-    // Blind-spot shading.
+    // Blind-spot shading (amber when occupied, red when signalling toward occupied side).
     if (status.blindSpotLeft || status.blindSpotRight) {
-      ctx.fillStyle = "rgba(255, 184, 64, 0.1)";
-      if (status.blindSpotLeft) ctx.fillRect(egoX - 44, egoY - 22, 30, 42);
-      if (status.blindSpotRight) ctx.fillRect(egoX + 14, egoY - 22, 30, 42);
+      if (status.blindSpotLeft) {
+        ctx.fillStyle = sim.indicator < 0 ? "rgba(255, 90, 90, 0.22)" : "rgba(255, 184, 64, 0.1)";
+        ctx.fillRect(egoX - 44, egoY - 22, 30, 42);
+      }
+      if (status.blindSpotRight) {
+        ctx.fillStyle = sim.indicator > 0 ? "rgba(255, 90, 90, 0.22)" : "rgba(255, 184, 64, 0.1)";
+        ctx.fillRect(egoX + 14, egoY - 22, 30, 42);
+      }
     }
 
     // Sensor horizon hint.

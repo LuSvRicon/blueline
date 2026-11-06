@@ -27,6 +27,7 @@ export class Scene {
   cameraMode: CameraMode = "chase";
   timeOfDay: "day" | "night" = "night";
   private hudInset = 0;
+  private floatingHudInset = 0;
   cockpitFov = COCKPIT_RIG.horizontalFov;
   cockpitEyeHeight = COCKPIT_RIG.eye.y;
   cockpitModelRig: {eye:THREE.Vector3;pitch:number;viewYaw?:number}|undefined;
@@ -370,6 +371,10 @@ export class Scene {
     if (cameraChanged) {
       this.camera.fov = this.cameraMode === "cockpit" ? cockpitVerticalFov(this.cockpitFov, this.camera.aspect) : 55;
       this.camera.near = this.cameraMode === "cockpit" ? .04 : .1;
+      if (this.floatingHudInset > 0) {
+        const h = Math.max(160, window.innerHeight - this.hudInset);
+        this.camera.setViewOffset(window.innerWidth, h, 0, this.floatingHudInset * (this.cameraMode === "cockpit" ? .2 : .5), window.innerWidth, h);
+      }
       this.camera.updateProjectionMatrix();
       this.projectedCameraMode = this.cameraMode;
       this.renderer.domElement.classList.toggle("camera-orbit-enabled", this.cameraMode === "orbit");
@@ -437,10 +442,13 @@ export class Scene {
   }
 
   /** Reserve actual viewport space for the cockpit instead of covering the road. */
-  setHudInset(pixels: number): void {
+  setHudInset(pixels: number, floating = false): void {
     const next = Math.max(0, Math.min(pixels, window.innerHeight - 160));
-    if (Math.abs(next - this.hudInset) < 1) return;
-    this.hudInset = next;
+    const reserved = floating ? 0 : next;
+    const offset = floating ? next : 0;
+    if (Math.abs(reserved - this.hudInset) < 1 && Math.abs(offset - this.floatingHudInset) < 1) return;
+    this.hudInset = reserved;
+    this.floatingHudInset = offset;
     this.onResize();
   }
 
@@ -521,6 +529,10 @@ export class Scene {
     const w = window.innerWidth;
     const h = Math.max(160, window.innerHeight - this.hudInset);
     this.camera.aspect = w / h;
+    // Keep the driver/ego above floating controls while drawing the world
+    // across the complete screen, including the transparent gaps below.
+    if (this.floatingHudInset > 0) this.camera.setViewOffset(w, h, 0, this.floatingHudInset * (this.cameraMode === "cockpit" ? .2 : .5), w, h);
+    else this.camera.clearViewOffset();
     if (this.cameraMode === "cockpit") this.camera.fov = cockpitVerticalFov(this.cockpitFov, this.camera.aspect);
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);

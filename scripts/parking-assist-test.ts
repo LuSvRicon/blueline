@@ -58,4 +58,18 @@ for (const direction of ["remote-forward", "remote-reverse"] as const) {
   for (let i = 0; i < 120; i++) sim.step(dt);
   check(sim.ego.v === 0 && sim.parkingAssist.status.state === "cancelled", "replay resumed a missing parking controller");
 }
+// Stationary cars parked immediately behind the target bay (within 1.0 m of rear bumper)
+// must not cause a false sweep abort during the final 25 cm of bay settling.
+{
+  const sim = new Simulation({ trafficCount: 0 }); sim.prepareParkingLab(); sim.usePerception = false;
+  const bay = sim.parkingBays[0];
+  const rearParked = sim.traffic.addTestVehicle("stalled", sim.road.numLanes - 1, bay.s - (bay.length / 2 + 2.7), 0, 0);
+  rearParked.d = bay.d;
+  check(sim.requestParking("apa"), "APA could not find bay with adjacent parked car behind bay");
+  for (let i = 0; i < 75 * 60 && sim.parkingAssist.status.state !== "complete"; i++) {
+    sim.parkingAssist.hold(true); sim.step(dt);
+    if (["cancelled", "blocked"].includes(sim.parkingAssist.status.state)) throw new Error(sim.parkingAssist.status.message);
+  }
+  check(sim.parkingAssist.status.state === "complete" && sim.metrics.collisions === 0, "APA false-aborted near parked car behind bay");
+}
 console.log("Parking assist: actual D/R trajectory, sensors, remote start, hold/release/link loss and sensor-fault stop PASS");

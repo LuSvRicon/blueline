@@ -704,11 +704,13 @@ export class CarFleet {
     for (const [side, active] of [["left", left], ["right", right]] as const) {
       const indicator = indicators[side];
       const material = indicator.material as THREE.MeshStandardMaterial;
-      material.color.setHex(active ? 0xffb52e : 0x60491f);
-      material.emissive.setHex(active ? 0xff8a00 : 0x100800);
-      // Production BSM telltales stay steadily lit while the object is in the
-      // blind zone; pulsing is reserved for urgent forward collision alerts.
-      material.emissiveIntensity = active ? 4.2 : 0.12;
+      const signallingToward = (side === "left" && this.sim.indicator < 0) || (side === "right" && this.sim.indicator > 0);
+      const flashHigh = Math.floor(timeSeconds * 8) % 2 === 0;
+      material.color.setHex(active ? (signallingToward && flashHigh ? 0xff5a36 : 0xffb52e) : 0x60491f);
+      material.emissive.setHex(active ? (signallingToward && flashHigh ? 0xff3b1f : 0xff8a00) : 0x100800);
+      // Production BSM telltales stay steadily lit while an object is in the
+      // blind zone, and flash rapidly when the turn signal is active toward that side.
+      material.emissiveIntensity = active ? (signallingToward ? (flashHigh ? 6.0 : 1.4) : 4.2) : 0.12;
     }
   }
 
@@ -799,7 +801,7 @@ export class CarFleet {
       blinkOn,
       night: this.night,
       motorcycle: false,
-      hazards: sim.adas.status.extra.hazardRequest,
+      hazards: sim.adas.status.extra.hazardRequest || sim.adas.status.aebHolding || (sim.adas.status.aeb && ego.v * 3.6 >= 50),
     });
 
     // ---- traffic ----------------------------------------------------------

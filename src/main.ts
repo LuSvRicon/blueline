@@ -38,6 +38,9 @@ import "./ui/game.css";
 import "./ui/dashboard-controls.css";
 import "./ui/dashboard-adas.css";
 import "./ui/dashboard.css";
+import "./ui/mobile.css";
+import "./ui/station.css";
+import { TouchSteering } from "./ui/TouchSteering.ts";
 import { SCENARIOS } from "./ui/scenarios.ts";
 import { CabinLookControls } from "./ui/CabinLookControls.ts";
 import { ParkingView } from "./render/ParkingView.ts";
@@ -136,6 +139,7 @@ function boot(): void {
     navigation: ribbon.group,
   }, audio);
   const cockpitLayout = new CockpitLayout(uiRoot, sim, scene, driveControls, camera360, telemetryPanel);
+  const touchSteering = new TouchSteering(uiRoot, driveControls);
   const cabinLook = new CabinLookControls(canvas,scene,()=>sim.paused);
 
   // ---- fixed-timestep loop ----------------------------------------------
@@ -219,6 +223,7 @@ function boot(): void {
       telemetryPanel.update();
       controlPanel.update();
       pedalControls.update(sim.telemetry);
+      touchSteering.update(sim.telemetry);
       consoleControls.update();
       camera360.update(sim.telemetry);
       cockpitLayout.update();

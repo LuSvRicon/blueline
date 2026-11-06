@@ -1,6 +1,6 @@
 // A single fixed-step input path for keyboard, touch and standard gamepads.
 import { Simulation } from "../sim/Simulation.ts";
-import { isTypingTarget, launchMenuOpen } from "./input.ts";
+import { isTypingTarget, launchMenuOpen, drivingDrawerOpen } from "./input.ts";
 
 const KEY_ACTION: Record<string, "left" | "right" | "throttle" | "brake"> = {
   KeyA: "left", ArrowLeft: "left", KeyD: "right", ArrowRight: "right",
@@ -128,7 +128,7 @@ export class DriveControls {
     this.pointer.brake = Math.max(0, Math.min(1, brake));
   }
 
-  get canDrive(): boolean { return !this.sim.paused && this.humanMode() && !launchMenuOpen() && !this.sim.recorder.playing && !document.hidden && !this.unfocused; }
+  get canDrive(): boolean { return !this.sim.paused && this.humanMode() && !launchMenuOpen() && !drivingDrawerOpen() && !this.sim.recorder.playing && !document.hidden && !this.unfocused; }
   setSteering(steer: number): void { if (this.canDrive) this.pointer.steer = Math.max(-1, Math.min(1, steer)); }
   private humanMode(): boolean { return this.sim.controlMode === "manual" || this.sim.controlMode === "adas"; }
   dispose(): void { this.events.abort(); this.clear(); }

@@ -11,6 +11,10 @@ export function launchMenuOpen(): boolean {
   return Boolean(intro && intro.style.display !== "none");
 }
 
+export function drivingDrawerOpen(): boolean {
+  return document.getElementById('ui')?.dataset?.drawerOpen === 'true';
+}
+
 /** A new/reset session must not inherit keys, pedals or gamepad commands. */
 export function releaseDrivingInputs(): void {
   document.dispatchEvent(new Event("blueline:release-driving-inputs"));

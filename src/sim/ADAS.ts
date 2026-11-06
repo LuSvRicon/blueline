@@ -259,6 +259,8 @@ export class ADASController {
   }
 
   cancelCruise(): void { this.cruiseCancelled = true; }
+  setLaneTarget(lane: number): void { this.laneTarget = lane; }
+  releaseAebLatch(): void { this.aebLatched = false; this.status.aeb = false; this.status.aebHolding = false; }
   releaseLaneOwnership():void { this.laneTarget=null;this.alcTargetLane=null;this.alcRequestedDir=0;this.alcArmTimer=0;this.alcProgress=0; }
   resumeCruise(): void { this.cruiseCancelled = false; this.cruiseHoldTime = 0; }
 
@@ -373,6 +375,17 @@ export class ADASController {
     let parkingFront: number | null = null;
     let aebCause='';
 
+    // Forward radar / camera longitudinal threat evaluation only considers targets
+    // inside the ego carriageway (or crossing pedestrians/vehicles), never oncoming
+    // traffic driving in separated opposing lanes on two-way roads.
+    const inForwardCarriageway = (o: Obstacle, predD: number) =>
+      o.roadBoundary !== undefined ||
+      o.kind === "ped" ||
+      (o.v >= -1.0 && (
+        (o.d >= road.forwardLeftEdge - 0.5 && o.d <= road.forwardRightEdge + road.shoulderWidth + 0.5) ||
+        (predD >= road.forwardLeftEdge - 0.5 && predD <= road.forwardRightEdge + road.shoulderWidth + 0.5)
+      ));
+
     for (const obstacle of obstacles) {
       const ds = wrapDiff(obstacle.s, egoS, path.length);
       const dd = obstacle.d - egoD;
@@ -380,20 +393,24 @@ export class ADASController {
       const closingSpeed = ego.v - obstacle.v;
       const ttc = closingSpeed > 0.1 ? gap / closingSpeed : Infinity;
       const rawLateralReach = (ego.dims.width + obstacle.width) / 2 + 0.25;
+      const cutInHorizon = obstacle.kind === "ped" ? 4.0 : 2.5;
+      const movingTowardEgoLane = obstacle.vd !== undefined && (obstacle.kind === "ped" || dd * obstacle.vd < 0);
+      const predictedDd = movingTowardEgoLane && Math.abs(obstacle.vd) > 0.1 && ttc > 0 && ttc < cutInHorizon ? dd + obstacle.vd * ttc : dd;
       // For crossing pedestrians (or merging vehicles), predict lateral position at arrival time (ttc)
-      let inPath = Math.abs(dd) <= rawLateralReach;
-      if (!inPath && obstacle.vd && Math.abs(obstacle.vd) > 0.1 && ttc > 0 && ttc < 4.0) {
-        const predictedDd = dd + obstacle.vd * ttc;
+      let inPath = inForwardCarriageway(obstacle, egoD + predictedDd) && Math.abs(dd) <= rawLateralReach;
+      if (!inPath && inForwardCarriageway(obstacle, egoD + predictedDd) && movingTowardEgoLane && Math.abs(obstacle.vd) > 0.1 && ttc > 0 && ttc < cutInHorizon) {
         // If they will cross into our path, or are currently crossing through
         if (Math.abs(predictedDd) <= rawLateralReach || (dd * predictedDd <= 0)) {
           inPath = true;
         }
       }
 
-      // When the driver owns steering, inspect the bicycle path in world space
-      // rather than assuming the car will follow the road centre around a bend.
-      // Lane-centred driving keeps the established Frenet sensor corridor.
-      if(!this.config.laneCentering||input.steeringOverride||Math.abs(input.steer)>.05){
+      // When the driver actively steers or overrides lane control, inspect the
+      // bicycle path in world space rather than assuming the car will follow
+      // the road centre around a bend. When steering is neutral on a curved
+      // road, keep the Frenet road corridor so curves do not project straight
+      // tangent lines into adjacent lanes or roadside structures.
+      if(input.steeringOverride||Math.abs(input.steer)>.05){
         inPath=false;
         const curvature=Math.tan(clamp(input.steer,-1,1)*ego.maxSteer)/ego.dims.wheelbase;
         const horizon=Math.min(4,Math.max(2,ego.v/Math.max(ego.maxDecel*ego.surfaceMu,1)+.5));
@@ -431,27 +448,56 @@ export class ADASController {
         const availableGap = Math.max(gap - reactionMargin+leadStoppingDistance, .5);
         const requestedDecel = ego.v**2 / (2 * availableGap);
         const requiredPressure = clamp(requestedDecel / Math.max(ego.maxDecel * ego.surfaceMu, .1), 0, 1);
+        const relativeDecel = closing**2 / (2 * Math.max(gap - reactionMargin, .5));
+        const relativePressure = clamp(relativeDecel / Math.max(ego.maxDecel * ego.surfaceMu, .1), 0, 1);
         const needsBrakeAssist = input.brake > 0 && requiredPressure > input.brake + .04 && ttc < this.config.warningTtc;
         if (this.config.aeb && approaching && (gap <= stoppingGap || ttc <= this.config.brakingTtc || gap < 2 || needsBrakeAssist)) {
           aebRequested = true;
-          // Brake to the estimated stopping demand when the driver is already
-          // braking; if there is no pedal input, apply full emergency pressure.
+          // Multi-stage AEB cascade (UN ECE R152 / Euro NCAP):
+          // - Brake Assist (EBA): when the driver is pressing the brake, boost to requiredPressure.
+          // - Stage 1 Partial Braking (~60-88% pressure): when coasting/ACC on dry pavement
+          //   behind a moving vehicle at moderate TTC (>1.15s) where relative deceleration suffices.
+          // - Stage 2 Full Braking (100% pressure): against stationary/VRU targets, wet/low-grip
+          //   surfaces, short TTC, high relative deceleration, or held accelerator pedal.
+          const partialBrakingStage = input.brake <= 0 &&
+            input.throttle <= 0.05 &&
+            ego.surfaceMu >= 0.9 &&
+            obstacle.kind !== "ped" &&
+            obstacle.v > 4.0 &&
+            ttc > 1.15 &&
+            gap > 12 &&
+            requiredPressure < 0.95 &&
+            relativePressure < 0.72;
           const demand = input.brake > 0
             ? requiredPressure
-            : 1;
+            : partialBrakingStage
+              ? clamp(Math.max(relativePressure * 1.25, 0.65), 0.65, 0.92)
+              : 1;
           requestedBrakeForce = Math.max(requestedBrakeForce, demand);
-          const cause=Math.abs(obstacle.vd)>.35?'Vật cắt vào đường xe chạy':'Không đủ khoảng cách dừng an toàn';
+          const cause = obstacle.kind === "ped"
+            ? "Người đi bộ trong hành lang phanh khẩn cấp"
+            : Math.abs(obstacle.vd) > .35
+              ? "Vật cắt vào đường xe chạy"
+              : obstacle.v > 1.0 && closingSpeed > 3.5
+                ? "Xe phía trước giảm tốc gấp"
+                : "Không đủ khoảng cách dừng an toàn";
           if(!aebCause||cause<aebCause)aebCause=cause;
         }
       }
 
       // Positive d is the driver's right in the rendered road convention.
+      // Exclude oncoming traffic in opposing lanes and parked/receding objects far behind.
       const rearClosing=obstacle.v-ego.v;
       const rearApproach=ds<0&&rearClosing>.5&&(-ds-(ego.dims.length+obstacle.length)/2)/rearClosing<4.5;
-      if (!obstacle.roadBoundary && availability.sensors.rearRadar && this.config.bsm && ds >= -100 && (ds >= -8 || rearApproach) && ds <= 3) {
+      const inSameDirectionCorridor=obstacle.v>=-0.5&&obstacle.d>=road.forwardLeftEdge-0.5&&obstacle.d<=road.forwardRightEdge+road.shoulderWidth+0.5;
+      const recedingBehind=ds<-4&&ego.v-obstacle.v>6;
+      const wasActiveSide = dd > 0 ? this.status.blindSpotRight : this.status.blindSpotLeft;
+      const bsmMaxDs = wasActiveSide ? 4.2 : 3.0;
+      const bsmMinDs = wasActiveSide ? -9.5 : -8.0;
+      if (!obstacle.roadBoundary && inSameDirectionCorridor && !recedingBehind && availability.sensors.rearRadar && this.config.bsm && ds >= -100 && (ds >= bsmMinDs || rearApproach) && ds <= bsmMaxDs) {
         const lateral = Math.abs(dd);
-        const nearSide = (ego.dims.width + obstacle.width) / 2 + 0.15;
-        const outerEdge = nearSide + laneWidth * 0.75;
+        const nearSide = (ego.dims.width + obstacle.width) / 2 + (wasActiveSide ? 0.05 : 0.15);
+        const outerEdge = nearSide + laneWidth * (wasActiveSide ? 0.92 : 0.78);
         if (lateral >= nearSide && lateral <= outerEdge) {
           if (dd > 0) blindSpotRight = true;
           else blindSpotLeft = true;
@@ -468,10 +514,20 @@ export class ADASController {
     // Keep the brake applied if the driver continues to request acceleration.
     // Without this hold, throttle resumes as soon as speed reaches zero, causing
     // repeated brake/re-acceleration pulses into the same stationary obstacle.
+    // If the driver actively steers onto a collision-free evasive trajectory
+    // (!aebRequested), release the AEB latch so the tyres retain full lateral
+    // cornering grip on the friction circle instead of locking straight.
+    const evasivePathCleared = !aebRequested && (!!input.steeringOverride || Math.abs(input.steer) > .05 || this.steeringReleaseTime > 0);
     if (aebRequested) this.aebLatched = true;
-    if (aebRequested) { this.cancelCruise(); cruiseActive = false; }
     const leadPullingAway=lead!==null&&lead.obstacle.v>.8&&lead.gap>this.config.standstillGap+1&&lead.obstacle.v>ego.v;
-    if (!this.config.aeb || !sensorsAvailable || leadPullingAway || (!lead&&ego.v<.3&&input.throttle<=0)) this.aebLatched = false;
+    const threatResolvedInMotion = !aebRequested && ego.v >= 1.5 && input.throttle <= 0 && obstacles.length > 0 &&
+      (lead === null || (lead.obstacle.v > 0.8 && (lead.obstacle.v >= ego.v - 0.3 || lead.gap > Math.max(this.config.standstillGap + 2, ego.v * 0.8))));
+    const driverTakesOverHold = !aebRequested && ego.v < 0.3 && input.brake > 0.15 && input.throttle <= 0;
+    if (!this.config.aeb || !sensorsAvailable || leadPullingAway || evasivePathCleared || threatResolvedInMotion || driverTakesOverHold || (!lead&&ego.v<.3&&input.throttle<=0)) this.aebLatched = false;
+    if (aebRequested && (ego.v < 2.0 || (lead && lead.obstacle.v < 0.8) || input.brake > 0)) {
+      this.cancelCruise();
+      cruiseActive = false;
+    }
     const adasBrakeForce = aebRequested ? Math.max(requestedBrakeForce, input.brake) : 0;
     const aebHolding = this.config.aeb && this.aebLatched && ego.v < .3;
     const aeb = !aebHolding && this.config.aeb && (
@@ -517,6 +573,7 @@ export class ADASController {
       }
     }
     const resumeSeconds = ASSISTANCE_REFERENCE.stopGoResumeSeconds;
+    if (input.throttle > 0.05 && !accHolding) this.cruiseHoldTime = 0;
     this.cruiseHoldTime = accHolding ? this.cruiseHoldTime + dt : this.cruiseHoldTime >= resumeSeconds ? this.cruiseHoldTime : 0;
     if (cruiseActive && this.cruiseHoldTime >= resumeSeconds) { targetSpeed = 0; accHolding = true; }
 
