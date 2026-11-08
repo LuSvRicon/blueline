@@ -124,6 +124,7 @@ export class ParkingAssist {
     const next: Body2D = { ...ego, ...ego.dims, x: ego.x + direction * Math.cos(ego.yaw) * sweepDist, y: ego.y + direction * Math.sin(ego.yaw) * sweepDist,
       yaw: ego.yaw + direction * sweepDist / ego.dims.wheelbase * Math.tan(command.steer) };
     for (const o of frame.obstacles) {
+      if (o.confirmed === false) continue;
       const w = frame.path.toCartesian(o.s, o.d), predicted = frame.path.toCartesian(o.s + o.v, o.d + o.vd);
       const body: Body2D = { x: w.x, y: w.y, yaw: w.heading, length: o.length, width: o.width };
       if (sweepBodies({ ...ego, ...ego.dims }, next, body, { ...body, x: predicted.x, y: predicted.y }, .3)) {

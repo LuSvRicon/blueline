@@ -198,8 +198,12 @@ export class HUD {
           ? "ĐANG PHANH KHẨN CẤP"
           : t.emergencyPullOver?.active ? t.emergencyPullOver.state==='hold' ? t.emergencyPullOver.onShoulder ? 'EDSS · ĐÃ DỪNG TRÊN LÀN KHẨN CẤP' : 'EDSS · ĐÃ DỪNG TRONG LÀN' : t.emergencyPullOver.state==='fallback' ? 'EDSS · PHANH DỪNG TRONG LÀN' : 'EDSS · ĐANG TẤP LỀ PHẢI'
           : t.adas.takeoverRequired ? t.adas.laneSupportLimited ? t.adas.laneSupportLimitCause==='lateral-grip' ? 'GIẢM TỐC · GIỚI HẠN BÁM NGANG' : "GIẢM TỐC · VƯỢT TỐC ĐỘ QUA CUA" : "HÃY TIẾP QUẢN ĐIỀU KHIỂN"
+          : t.adas.extra.blindSpotBraking ? "BCA · PHANH KHI RỜI CHỖ"
           : t.adas.extra.pedalMitigation ? "PMC · NGẮT GA VÀ PHANH"
+          : t.adas.extra.evasiveSteering ? "ESA · ĐÁNH LÁI KHẨN CẤP"
           : t.adas.aebHolding ? "AEB · ĐANG GIỮ DỪNG"
+          : t.adas.extra.blindSpotIntervention ? "BCA · TRÁNH ĐIỂM MÙ"
+          : t.adas.extra.emergencyLaneKeeping ? "ELK · GIỮ LÀN KHẨN CẤP"
           : t.adas.accState === "cancelled" ? "ACC ĐÃ HỦY · ĐIỀU KHIỂN CHÂN GA"
           : t.adas.trafficLightStopping ? t.adas.trafficLight === "yellow" ? "ĐÈN VÀNG · DỪNG TRƯỚC VẠCH" : "ĐÈN ĐỎ · DỪNG TRƯỚC VẠCH"
           : t.adas.curveSpeedLimited ? "ACC · ĐIỀU CHỈNH TỐC ĐỘ QUA CUA"

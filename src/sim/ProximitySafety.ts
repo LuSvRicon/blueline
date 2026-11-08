@@ -4,12 +4,13 @@ import { Obstacle } from "../planner/Trajectory.ts";
 import { ASSISTANCE_REFERENCE as REF } from './AssistancePolicy.ts';
 
 /** Idealised short-range radar/ultrasonic model; distances are body clearances. */
-export function proximitySafety(ego: Vehicle, path: ReferencePath, obstacles: Obstacle[], reverse: boolean) {
+export function proximitySafety(ego: Vehicle, path: ReferencePath, obstacles: Obstacle[], reverse: boolean, estimatedMu = ego.surfaceMu) {
   let front: number | null = null, rear: number | null = null;
   let left: number | null = null, right: number | null = null;
   let rctaLeft = false, rctaRight = false, rearAeb = false, crossBrake = false, parkingBrake = false;
   const c = Math.cos(ego.yaw), s = Math.sin(ego.yaw);
   for (const o of obstacles) {
+    if (o.confirmed === false) continue;
     const w = path.toCartesian(o.s, o.d);
     const x = (w.x - ego.x) * c + (w.y - ego.y) * s;
     const y = -(w.x - ego.x) * s + (w.y - ego.y) * c;
@@ -31,7 +32,7 @@ export function proximitySafety(ego: Vehicle, path: ReferencePath, obstacles: Ob
     const vy = Math.sin(angle) * o.v + Math.cos(angle) * o.vd;
     const closing = ego.v + vx;
     const ttc = closing > .1 ? gx / closing : Infinity;
-    const stopDistance = Math.max(2.5, ego.v ** 2 / (2 * Math.max(ego.maxDecel * ego.surfaceMu, 1)) + ego.v * .4 + 1.2);
+    const stopDistance = Math.max(2.5, ego.v ** 2 / (2 * Math.max(ego.maxDecel * estimatedMu, 1)) + ego.v * .4 + 1.2);
     const predictionTime = Math.min(3, Number.isFinite(ttc) ? Math.max(.3, ttc) : 2);
     const predictedY = y + vy * predictionTime;
     const entersCorridor = Math.abs(predictedY) < hy + ego.dims.width / 2 + .6 || y * predictedY <= 0;

@@ -42,10 +42,11 @@ export class ExtendedAssistance {
   private monitorStop = false;
   private beamOn = false;
   private evadeTargetLane: number | null = null;
+  private lastCommandedEvadeLane: number | null = null;
   private evadeTimer = 0;
   private evadeAutoTriggered = false;
   private previousInput: ExtendedRuntimeState['previousInput'] = { steer: 0, throttle: 0, brake: 0 };
-  get activeEvadeLane(): number | null { return this.evadeTargetLane; }
+  get activeEvadeLane(): number | null { return this.evadeTargetLane ?? this.lastCommandedEvadeLane; }
   /** Explicit laboratory injection, not a diagnosis from a camera. */
   triggerEmergencyStop():void { this.monitorStop=true; }
   captureState(): ExtendedRuntimeState {
@@ -68,6 +69,7 @@ export class ExtendedAssistance {
     this.inattentiveTime = this.handsOffTime = this.stoppedTime = this.departureTime = this.beamClearTime = this.evadeTimer = 0;
     this.stoppedGap = null;
     this.evadeTargetLane = null;
+    this.lastCommandedEvadeLane = null;
     this.evadeAutoTriggered = false;
     this.monitorStop = false;
     this.beamOn = false; this.previousInput = { steer: 0, throttle: 0, brake: 0 };
@@ -79,37 +81,40 @@ export class ExtendedAssistance {
     const availability = assistanceAvailability(frame);
     const available = availability.forward;
     const laneAvailable = availability.lane;
+    const muEst = clamp(frame.estimatedMu ?? ego.surfaceMu, 0.2, 1.1);
     const laneHeading = path.cartesianAt(egoS).heading;
     const k = path.signedCurvatureAt(egoS);
     const feedForward = Math.atan(ego.dims.wheelbase * k / Math.max(.25, 1 - k * egoD));
     const direction = options.gear === "R" ? -1 : 1;
+    this.lastCommandedEvadeLane = null;
     let nearest: { gap: number; v: number } | null = null;
     let beamBlocked = false;
     for (const o of obstacles) {
       // Road geometry is handled by lane/edge support and proximity braking,
       // not by vehicle-only departure, blind-spot or headlamp detection.
       if (o.roadBoundary) continue;
+      const confirmed = o.confirmed !== false;
       const ds = wrapDiff(o.s, egoS, path.length), dd = o.d - egoD;
       const halfWidth = (ego.dims.width + o.width) / 2;
       const gap = ds - (ego.dims.length + o.length) / 2;
-      if (available && o.kind !== 'ped' && ds > 0 && Math.abs(dd) < halfWidth && (!nearest || gap < nearest.gap)) nearest = { gap, v: o.v };
-      if (availability.sensors.camera && o.kind !== "ped" && ds > 0 && ds < 150 && Math.abs(dd) < road.totalWidth + 4) beamBlocked = true;
+      const inSameDirection = o.v >= -0.5 && o.d >= road.forwardLeftEdge - 0.5 && o.d <= road.forwardRightEdge + road.shoulderWidth + 0.5;
+      if (confirmed && available && o.kind !== 'ped' && inSameDirection && ds > 0 && Math.abs(dd) < halfWidth && (!nearest || gap < nearest.gap)) nearest = { gap, v: o.v };
+      if (confirmed && availability.sensors.camera && o.kind !== "ped" && ds > 0 && ds < 150 && Math.abs(dd) < road.totalWidth + 4) beamBlocked = true;
       const rearGap = -ds - (ego.dims.length + o.length) / 2;
       const sideClosing = o.v - ego.v;
       const rearTtc = sideClosing > .2 ? rearGap / sideClosing : Infinity;
-      const sideThreat = o.v > .5 && Math.abs(dd) > halfWidth - .2 && Math.abs(dd) < halfWidth + 4 &&
+      const sideThreat = confirmed && o.v > .5 && Math.abs(dd) > halfWidth - .2 && Math.abs(dd) < halfWidth + 4 &&
         ((ds >= -8 && ds < 4) || (rearTtc >= 0 && rearTtc < 5));
       if (availability.sensors.rearRadar && config.safeExit && sideThreat && ego.v < .3) {
         if (dd < 0) status.safeExitLeft = true; else status.safeExitRight = true;
       }
-      const inSameDirection = o.v >= -0.5 && o.d >= road.forwardLeftEdge - 0.5 && o.d <= road.forwardRightEdge + road.shoulderWidth + 0.5;
-      const conflict = inSameDirection && (ds > -8 && ds < 5 || (ds < 0 && sideClosing > .2 && rearGap / sideClosing < 3));
+      const conflict = confirmed && inSameDirection && (ds > -8 && ds < 5 || (ds < 0 && sideClosing > .2 && rearGap / sideClosing < 3));
       const steeringToward = Math.sign(input.steer) === Math.sign(dd) && Math.abs(input.steer) > .05;
       const lateralThreat = Math.abs(dd) < halfWidth + .8 || Math.abs(dd + (o.vd ?? 0)) < halfWidth + .3;
       // Separate from steering support: brake when leaving a stopped position
       // towards a rapidly approaching blind-spot vehicle (EV9 departure BCA).
       const departureIntent = steeringToward || (frame.indicator !== undefined && frame.indicator !== 0 && Math.sign(frame.indicator) === Math.sign(dd));
-      const departureThreat = inSameDirection && ds < 0 && sideClosing * 3.6 > 5 && rearGap >= -2 && rearGap / Math.max(sideClosing, .1) < 3 &&
+      const departureThreat = confirmed && inSameDirection && ds < 0 && sideClosing * 3.6 > 5 && rearGap >= -2 && rearGap / Math.max(sideClosing, .1) < 3 &&
         Math.abs(dd) > halfWidth - .2 && Math.abs(dd) < halfWidth + road.laneWidth;
       if (config.blindSpotAvoidance && availability.sensors.rearRadar && availability.conditions.escAvailable && options.gear === 'D' &&
         ego.v * 3.6 < 3 && departureIntent && departureThreat && (ego.v > .05 || input.throttle > .05)) {
@@ -118,19 +123,31 @@ export class ExtendedAssistance {
       }
       if (availability.sensors.rearRadar && config.blindSpotAvoidance && laneAvailable && ego.v > 3 && options.gear === 'D' && conflict && lateralThreat && steeringToward) {
         status.blindSpotIntervention = true;
-        // Simulated limited steering assistance; a strong driver input still
-        // wins. Never initiates an autonomous swerve into the opposite lane.
-        if (Math.abs(input.steer) < .7) steer = feedForward - Math.sign(dd) * Math.min(.12, Math.atan(3 * ego.dims.wheelbase / Math.max(ego.v ** 2, 1)));
+        // Cooperative directional arbitration: never weakens a stronger inward
+        // correction from LFA/ESA, while a strong driver input (>=0.7) still wins.
+        if (Math.abs(input.steer) < .7) {
+          const bcaSteer = clamp(
+            feedForward + wrapAngle(laneHeading - ego.yaw) * 0.65 - Math.sign(dd) * Math.min(.12, Math.atan(3 * ego.dims.wheelbase / Math.max(ego.v ** 2, 1))),
+            -ego.maxSteer * 0.5,
+            ego.maxSteer * 0.5,
+          );
+          steer = dd > 0 ? Math.min(steer, bcaSteer) : Math.max(steer, bcaSteer);
+        }
       }
     }
     const outwardRate = ego.v * Math.sin(wrapAngle(ego.yaw - laneHeading));
     const left = road.laneCenter(0) - road.laneWidth / 2 + ego.dims.width / 2;
     const right = road.forwardRightEdge + road.shoulderWidth - ego.dims.width / 2;
     const predictedD = egoD + outwardRate * (this.evadeTargetLane !== null ? .35 : .8);
-    const edgeDirection = predictedD < left && outwardRate < 0 ? -1 : predictedD > right && outwardRate > 0 ? 1 : 0;
+    const edgeDirection = predictedD < left && outwardRate < -0.08 ? -1 : predictedD > right && outwardRate > 0.08 ? 1 : 0;
     if (config.emergencyLaneKeeping && laneAvailable && options.gear === 'D' && ego.v > 5 && edgeDirection) {
       status.emergencyLaneKeeping = true;
-      if (Math.abs(input.steer) < .7) steer = feedForward - edgeDirection * Math.min(.15, Math.atan(3 * ego.dims.wheelbase / Math.max(ego.v ** 2, 1)));
+      if (Math.abs(input.steer) < .7) {
+        const elkHeadingErr = wrapAngle(laneHeading - ego.yaw);
+        const elkInward = Math.min(.18, Math.atan(3.5 * ego.dims.wheelbase / Math.max(ego.v ** 2, 1)));
+        const elkSteer = clamp(feedForward + elkHeadingErr - edgeDirection * elkInward, -ego.maxSteer * 0.65, ego.maxSteer * 0.65);
+        steer = edgeDirection < 0 ? Math.max(steer, elkSteer) : Math.min(steer, elkSteer);
+      }
     }
     // Evasive Steering Assist (ESA / Kia EV9 FCA2 Evasive Steering Assist):
     // 1. Driver-initiated ESA (>= 30 km/h): when a forward collision is imminent and
@@ -142,7 +159,7 @@ export class ExtendedAssistance {
     //    automatically steer into a verified clear same-direction adjacent lane and
     //    hold that target lane until the vehicle settles safely inside it.
     const currentLane = road.laneOf(egoD);
-    const availableDecel = Math.max(ego.maxDecel * ego.surfaceMu * .95, 1);
+    const availableDecel = Math.max(ego.maxDecel * muEst * .95, 1);
     const closingFront = nearest ? Math.max(ego.v - nearest.v, 0) : 0;
     const pureStopDist = nearest ? closingFront ** 2 / (2 * availableDecel) : 0;
     const frontStopGap = pureStopDist + ego.v * .2 + 2.5;
@@ -180,7 +197,7 @@ export class ExtendedAssistance {
     const driverSteerDir = Math.abs(input.steer) > .06 ? Math.sign(input.steer) : 0;
     let targetEvadeLane: number | null = null;
     if (available && laneAvailable && availability.conditions.escAvailable && options.gear === 'D' &&
-      !status.blindSpotIntervention && !status.emergencyLaneKeeping) {
+      !status.blindSpotIntervention) {
       if (config.aeb && ego.v * 3.6 >= 30 && driverSteerDir !== 0 && frontCritical && isLaneClearForEvade(currentLane + driverSteerDir)) {
         targetEvadeLane = currentLane + driverSteerDir;
         this.evadeTargetLane = null;
@@ -188,7 +205,8 @@ export class ExtendedAssistance {
         this.evadeAutoTriggered = false;
       } else if (this.evadeTargetLane !== null) {
         targetEvadeLane = this.evadeTargetLane;
-      } else if ((config.aeb || config.laneCentering || config.laneKeeping) && ego.v * 3.6 >= 85 && input.throttle <= 0.05 && cannotBrakeInTime) {
+      } else if (!status.emergencyLaneKeeping && availability.sensors.rearRadar && (config.laneCentering || config.laneKeeping) &&
+        ego.v * 3.6 >= 85 && input.throttle <= 0.05 && cannotBrakeInTime) {
         for (const candidate of [currentLane - 1, currentLane + 1]) {
           if (isLaneClearForEvade(candidate)) {
             targetEvadeLane = candidate;
@@ -202,32 +220,36 @@ export class ExtendedAssistance {
     }
 
     if (targetEvadeLane !== null) {
+      this.lastCommandedEvadeLane = targetEvadeLane;
       const targetD = road.laneCenter(targetEvadeLane);
-      const latRem = egoD - targetD;
       const evasiveDir = Math.sign(targetD - egoD) || driverSteerDir || 1;
       status.evasiveSteering = true;
+      const esaHeadingErr = wrapAngle(laneHeading - ego.yaw);
+      const esaFrontCross = (egoD - targetD) + (ego.dims.wheelbase * 0.5) * Math.sin(-esaHeadingErr);
       const esaSteer = clamp(
         feedForward + stanleyControl(
-          wrapAngle(laneHeading - ego.yaw),
-          egoD - targetD,
+          esaHeadingErr,
+          esaFrontCross,
           ego.v,
-          { k: 2.5, kSoft: 1.2, maxSteer: ego.maxSteer },
+          { k: 2.0, kSoft: 1.4, maxSteer: ego.maxSteer },
         ),
         -ego.maxSteer * 0.55,
         ego.maxSteer * 0.55,
       );
-      steer = driverSteerDir !== 0
+      const candidateSteer = driverSteerDir !== 0
         ? (evasiveDir > 0 ? Math.max(steer, esaSteer) : Math.min(steer, esaSteer))
         : esaSteer;
+      steer = status.emergencyLaneKeeping
+        ? (edgeDirection < 0 ? Math.max(steer, candidateSteer) : Math.min(steer, candidateSteer))
+        : candidateSteer;
       // Modulate automatic braking during the evasive swerve so longitudinal
-      // deceleration does not saturate the tire friction circle.
+      // deceleration does not saturate the tire friction circle, without
+      // cancelling natural passive coasting once the original lane clears.
       if (input.brake < .8) {
-        const clearedOriginalLane = this.evadeAutoTriggered && Math.abs(egoD - targetD) < road.laneWidth * 0.45 && !frontCritical;
-        const maxSafeBraking = clearedOriginalLane ? 0 : -ego.maxDecel * ego.surfaceMu * .55;
-        accel = Math.max(accel, maxSafeBraking);
+        accel = Math.max(accel, -ego.maxDecel * muEst * .55);
       }
     }
-    const proximity = proximitySafety(ego, path, availability.sensors.ultrasonic ? obstacles : [], direction < 0);
+    const proximity = proximitySafety(ego, path, availability.sensors.ultrasonic ? obstacles : [], direction < 0, muEst);
     const bumper = direction > 0 ? proximity.front : proximity.rear;
     if (config.pedalMitigation && availability.sensors.ultrasonic && (options.gear === "D" || options.gear === "R") && ego.v < 2 && input.throttle > .85 && bumper !== null && bumper < 2.5) {
       status.pedalMitigation = true; accel = Math.min(accel, -ego.maxDecel);

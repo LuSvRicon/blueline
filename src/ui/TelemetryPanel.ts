@@ -44,6 +44,7 @@ export class TelemetryPanel {
           <div class="tel-desc" id="tel-d-desc">Chính giữa làn</div>
         </div>
       </div>
+      <div class="telemetry-chart-title" id="tel-tire-abs-status">Độ trượt lốp: 0.0% · ABS 4 kênh: Sẵn sàng</div>
       <div class="telemetry-chart-title">Biểu đồ động thái thời gian thực (10 giây)</div>
       <canvas class="telemetry-canvas" id="telemetry-canvas" width="340" height="96"></canvas>
       <div class="telemetry-legend">
@@ -132,6 +133,19 @@ export class TelemetryPanel {
     const dDesc = document.getElementById("tel-d-desc");
     if (dDesc) {
       dDesc.textContent = Math.abs(laneOffset) < 0.15 ? "Chính giữa làn" : laneOffset > 0 ? "Lệch phải" : "Lệch trái";
+    }
+
+    const tireAbsEl = document.getElementById("tel-tire-abs-status");
+    if (tireAbsEl) {
+      const slipPct = (this.sim.ego.maxWheelSlip * 100).toFixed(1);
+      const absLabel = this.sim.ego.wheelAbsActive
+        ? "ĐANG ĐIỀU BIẾN ÁP SUẤT"
+        : this.sim.ego.wheelAbsEnabled
+          ? "Sẵn sàng"
+          : "TẮT";
+      const frontLoadPct = Math.round(this.sim.ego.frontLoadFraction * 100);
+      tireAbsEl.textContent = `${this.sim.ego.physicsProfile.massKg} kg · Tải cầu trước ${frontLoadPct}% · Trượt lốp ${slipPct}% · ABS: ${absLabel}`;
+      tireAbsEl.style.color = this.sim.ego.wheelAbsActive ? "#facc15" : "";
     }
 
     // Push history (rolling 10s = 300 samples at 30 Hz)

@@ -19,10 +19,12 @@ export class CockpitLayout {
   private pauseOverlay: HTMLElement;
   private lastCamera: CameraMode;
   private lastRefresh = -Infinity;
-  private phoneQuery = window.matchMedia("(max-width: 1024px) and (max-height: 540px) and (orientation: landscape)");
+  private phoneQuery = window.matchMedia("(max-width: 839px), (max-width: 1024px) and (max-height: 580px) and (orientation: landscape)");
+  private portraitQuery = window.matchMedia("(max-width: 839px) and (orientation: portrait)");
   private mobileView: "drive" | "adas" | "camera" = "drive";
   private beforeReverseView: "drive" | "adas" | "camera" = "drive";
   private previousGear: string;
+  private previousControlMode: Simulation["controlMode"];
   private steeringHome: HTMLElement;
   private indicatorsHome: HTMLElement;
 
@@ -77,6 +79,11 @@ export class CockpitLayout {
     this.pauseOverlay = root.querySelector<HTMLElement>(".game-pause-overlay")!;
     this.lastCamera = scene.cameraMode;
     this.previousGear = sim.gear;
+    this.previousControlMode = sim.controlMode;
+    if (sim.controlMode === "adas") {
+      this.mobileView = "adas";
+      this.beforeReverseView = "adas";
+    }
     this.steeringHome = root.querySelector<HTMLElement>(".steering-controls")!.parentElement!;
     this.indicatorsHome = root.querySelector<HTMLElement>(".adas-indctl")!.parentElement!;
     dock.insertAdjacentHTML("beforeend", `
@@ -95,6 +102,7 @@ export class CockpitLayout {
     const adapt = () => {
       drive.clear();
       root.classList.toggle("phone-landscape", this.phoneQuery.matches);
+      root.classList.toggle("phone-portrait", this.portraitQuery.matches);
       const steering = root.querySelector<HTMLElement>(".steering-controls")!;
       const indicators = root.querySelector<HTMLElement>(".adas-indctl")!;
       if (this.phoneQuery.matches) {
@@ -108,6 +116,7 @@ export class CockpitLayout {
       this.lastRefresh = -Infinity;
     };
     this.phoneQuery.addEventListener("change", adapt);
+    this.portraitQuery.addEventListener("change", adapt);
     window.addEventListener("orientationchange", () => drive.clear());
     adapt();
     root.querySelector(".adas-config-heading")!.insertAdjacentHTML("beforeend", '<button type="button" class="adas-config-close" aria-label="Đóng cài đặt hỗ trợ" title="Đóng cài đặt hỗ trợ">×</button>');
@@ -306,6 +315,13 @@ export class CockpitLayout {
     document.getElementById("game-score-value")!.textContent = String(Math.round(this.sim.metrics.scores().overall));
     document.getElementById("game-focus")!.setAttribute("aria-pressed", String(this.root.classList.contains("focus-mode")));
     document.getElementById("game-surround")!.setAttribute("aria-pressed", String(this.phoneQuery.matches ? this.mobileView === "camera" : this.camera360.expanded));
+    if (this.previousControlMode !== this.sim.controlMode) {
+      if (this.phoneQuery.matches && this.sim.gear !== "R") {
+        if (this.sim.controlMode === "adas") this.setMobileView("adas");
+        else if (this.sim.controlMode === "manual") this.setMobileView("drive");
+      }
+      this.previousControlMode = this.sim.controlMode;
+    }
     if (this.previousGear !== this.sim.gear) {
       if (this.phoneQuery.matches) {
         if (this.sim.gear === "R") { this.beforeReverseView = this.mobileView; this.setMobileView("camera"); }

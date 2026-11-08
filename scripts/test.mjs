@@ -32,6 +32,8 @@ const TESTS = [
   "extended-adas-test",
   "adas-brake-test",
   "aeb-following-test",
+  "aeb-audit-test",
+  "aeb-deep-physics-test",
   "driving-systems-test",
   "dynamics-collision-test",
   "render-geometry-test",
@@ -65,6 +67,7 @@ const TESTS = [
   "road-sign-test",
   "learn-test",
   "evo-test",
+  "adas-coordination-audit",
 ];
 const requested = process.argv.slice(2);
 if (requested.some((name) => !TESTS.includes(name))) throw new Error("Unknown test name. Pass names from the TESTS list without extensions.");

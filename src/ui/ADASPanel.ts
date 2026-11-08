@@ -366,7 +366,8 @@ export class ADASPanel {
     const a = assistanceAvailability({ sensorsAvailable: !sim.sensorFault, sensorAvailability: sim.sensorAvailability, laneConfidence: sim.laneMarkingConfidence });
     document.getElementById('adas-availability-readout')!.textContent = [sim.adas.status.availabilityReason,
       !a.sensors.camera ? 'Camera bị che: LFA/LKA/biển báo không sẵn sàng' : '',
-      !a.sensors.rearRadar ? 'Radar sau lỗi: BSM/RCTA/SEA không sẵn sàng' : '',
+      !a.sensors.frontRadar ? 'Radar trước lỗi: ACC không sẵn sàng · AEB chế độ suy giảm' : '',
+      !a.sensors.rearRadar ? 'Radar sau lỗi: BSM/RCTA/SEA/ESA tự động không sẵn sàng' : '',
       !a.sensors.ultrasonic ? 'Siêu âm lỗi: đỗ xe không sẵn sàng' : '',
       sim.adas.status.alc === 'blocked' ? sim.adas.status.alcReason : '',
       sim.adas.status.highwayAssistActive ? 'Phối hợp ACC + LFA trên cao tốc' : sim.adas.status.trafficJamAssistActive ? 'Phối hợp ACC + LFA khi ùn tắc' : '',

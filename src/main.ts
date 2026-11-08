@@ -46,6 +46,7 @@ import { CabinLookControls } from "./ui/CabinLookControls.ts";
 import { ParkingView } from "./render/ParkingView.ts";
 import {WorldSceneryView} from './render/WorldSceneryView.ts';
 import {RenderMotion} from './render/RenderMotion.ts';
+import {selectedVehicleModel} from './render/VehicleCatalog.ts';
 
 function boot(): void {
   const canvas = document.getElementById("scene") as HTMLCanvasElement;
@@ -54,6 +55,7 @@ function boot(): void {
 
   const params = new URLSearchParams(location.search);
   const sim = new Simulation({ trackId: getTrack(params.get("map") ?? undefined).id });
+  sim.setVehicleProfile(selectedVehicleModel());
 
   // Vietnamese traffic is the default; profile and scenarios can be deep-linked.
   sim.setTrafficProfile(params.get("profile") === "international" ? "international" : "vietnam");
