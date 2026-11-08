@@ -25,11 +25,21 @@ export class CockpitLayout {
   private beforeReverseView: "drive" | "adas" | "camera" = "drive";
   private previousGear: string;
   private previousControlMode: Simulation["controlMode"];
+  private root: HTMLElement;
+  private sim: Simulation;
+  private scene: Scene;
+  private drive: DriveControls;
+  private camera360: Camera360Widget;
   private steeringHome: HTMLElement;
   private indicatorsHome: HTMLElement;
 
-  constructor(private root: HTMLElement, private sim: Simulation, private scene: Scene,
-    private drive: DriveControls, private camera360: Camera360Widget, telemetry: TelemetryPanel) {
+  constructor(root: HTMLElement, sim: Simulation, scene: Scene,
+    drive: DriveControls, camera360: Camera360Widget, telemetry: TelemetryPanel) {
+    this.root = root;
+    this.sim = sim;
+    this.scene = scene;
+    this.drive = drive;
+    this.camera360 = camera360;
     root.classList.add("game-ui", "dashboard-ui", "station-ui");
     root.insertAdjacentHTML("beforeend", `
       <header class="game-toolbar" aria-label="Thanh công cụ mô phỏng">
